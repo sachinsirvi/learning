@@ -1,0 +1,376 @@
+
+/*
+echo '<pre>';
+$modified = $datum[0]['lastExecutedOn'];
+pr($modified);
+
+
+
+// Query to fetch approval details
+$query = "SELECT
+    MAX(max_modified_approved) AS max_modified_approved,
+    MIN(min_modified_unapproved) AS min_modified_unapproved,
+    MIN(is_approve_min_unapproved) AS is_approve_min_unapproved,
+    sequence_min_unapproved,
+    is_approve_min_unapproved,
+    entity_approvals.id,
+    entity_approvals.entitytype_id,
+    entity_approvals.modified,
+    outlets.name AS NAME,
+    entity_approvals.sequence,
+    createduser.email AS createduser_email,
+    createduser.name AS createduser_name,
+    warehouses.name AS warehousesname,
+    asm.name AS asm_name,
+    asm.username AS asm_username,
+    rsm.name AS rsm_name,
+    rsm.username AS rsm_username,
+    asm.id AS approver1_ids,
+    asm.email AS approver1_email,
+    rsm.id AS approver2_ids,
+    entity_approvals.reason_comment AS reason,
+    rsm.email AS approver2_email,
+    entity_approvals.approved_date,
+    entity_approvals.is_approve,
+    (
+        SELECT
+            MAX(is_approve)
+        FROM
+            entity_approvals prev_approval
+        WHERE
+            prev_approval.entitytype_id = entity_approvals.entitytype_id
+            AND prev_approval.sequence = entity_approvals.sequence - 1
+            GROUP BY  prev_approval.entitytype_id
+    ) AS prev_is_approve
+FROM
+    (
+        SELECT
+            entity_approvals.entitytype_id,
+            entity_approvals.is_approve,
+            entity_approvals.sequence,
+            MAX(CASE WHEN entity_approvals.is_approve = 1 THEN entity_approvals.approved_date ELSE NULL END) AS max_modified_approved,
+            MIN(CASE WHEN entity_approvals.is_approve IN (0, 2, 3) THEN entity_approvals.modified ELSE NULL END) AS min_modified_unapproved,
+            MIN(CASE WHEN entity_approvals.is_approve IN (0, 2, 3) THEN entity_approvals.sequence ELSE NULL END) AS sequence_min_unapproved,
+            MIN(CASE WHEN entity_approvals.is_approve IN (0, 2, 3) THEN entity_approvals.is_approve ELSE NULL END) AS is_approve_min_unapproved
+        FROM
+            entity_approvals
+        WHERE
+            entity_approvals.entitytype = 'outlet'
+             
+        GROUP BY
+            entity_approvals.entitytype_id
+    ) AS subquery
+LEFT JOIN entity_approvals ON entity_approvals.entitytype_id = subquery.entitytype_id
+LEFT JOIN outlets ON outlets.id = entity_approvals.entitytype_id
+LEFT JOIN areas ON areas.id = outlets.area_id
+LEFT JOIN warehouses ON warehouses.id = areas.warehouse_id
+LEFT JOIN users AS createduser ON createduser.id = entity_approvals.createdbyuser_id
+LEFT JOIN users AS asm ON asm.id = createduser.reportingto
+LEFT JOIN users AS rsm ON rsm.id = asm.reportingto
+LEFT JOIN manageroles ON manageroles.rolespecificid = warehouses.id AND manageroles.roletables = 'warehouses'
+LEFT JOIN users AS approvers ON approvers.id = manageroles.user_id
+LEFT JOIN reasons ON reasons.id = entity_approvals.reason_id
+WHERE entity_approvals.modified >'$modified' AND createduser.active=1
+GROUP BY
+    entitytype_id
+ORDER BY
+    entity_approvals.modified
+ASC ";
+
+// Fetch approval details
+$results = $_DB->query($query)->fetchAll('assoc');
+
+// Process approval details
+if (!empty($results)) {
+    foreach ($results as $row) {
+        $sequence = isset($row['sequence_min_unapproved']) ? $row['sequence_min_unapproved'] : $row['sequence'];
+
+        $modified_date = $row['min_modified_unapproved'];
+        $modified_date = $row['modified'];
+
+        echo "========================================================================";
+        pr($modified_date);
+        $outletid = $row['entitytype_id'];
+        $is_Minapprove = $row['is_approve_min_unapproved'];
+        $is_approve = $row['is_approve'];
+        $approved_date = $row['approved_date'];
+        $outlet_name = $row['NAME'];
+        $createduser_name = $row['createduser_name'];
+        $createduser_email = $row['createduser_email'];
+        $warehousesname = $row['warehousesname'];
+        $approver_ids = array();
+        $prev_is_approve = $row['prev_is_approve'];
+        $reason = $row['reason'];
+
+        if ($is_approve == 1)
+            $is_approve = $is_Minapprove;
+        $asm_name = $row['asm_name'];
+        $asm_username = $row['asm_username'];
+        $rsm_name = $row['rsm_name'];
+        $rsm_username = $row['rsm_username'];
+        $approver1_email = $row['approver1_email'];
+        $approver2_email = $row['approver2_email'];
+        echo "emails to send";
+
+        $all_approved = 0;
+
+        echo "sequence - $sequence \n";
+        echo "is approve = $is_approve\n";
+        echo "prev approve = $prev_is_approve\n";
+
+        // Default approver email
+        $approver_email = '';
+
+        if ($sequence == 1) {
+            echo "In case 1";
+            if ($is_approve == 0) {
+                $approver_email = $approver1_email; // Use approver1 email
+                echo "in 1 if";
+            } else if ($is_approve == 2 || $is_approve == 3) {
+                $approver_email = $createduser_email; // Use created user email
+                echo "in 1 else if";
+                if ($is_approve == 3) {
+                    $reWorkEmail = $createduser_email;
+                    $reWorkUserName = $asm_username;
+                }
+
+            }
+            $approvedby = $row['asm_name'];
+        } else if ($sequence == 2) {
+            echo "In case 2";
+            if ($is_approve == 0) {
+                $approver_email = $approver2_email; // Use approver2 email
+                echo 'in 2nd if';
+                echo "in 2 if";
+            } else if ($is_approve == 2 || $is_approve == 3) {
+                $approver_email = $createduser_email;
+
+                if ($is_approve == 3) {
+                    $reWorkEmail = $approver1_email;
+                    $reWorkUserName = $rsm_username;
+                }
+                echo "in 2 else if";
+
+            }
+            $approvedby = $row['rsm_name'];
+        } else if ($sequence == 3) {
+            echo "In case 3";
+            if ($is_approve == 0) {
+                $approver_email = 'nikhil.vasu@bausch.com';
+            } else if ($is_approve == 2 || $is_approve == 3) {
+                $approver_email = $createduser_email;
+
+                if ($is_approve == 3) {
+                    $reWorkEmail = $approver2_email;
+                    $reWorkUserName = 'Bnlibos.Nikhil';
+                }
+            }
+        } else if ($sequence == 4) {
+            echo "In case 4";
+            if ($is_approve == 0) {
+                $approver_email = 'jaya.banerjee@bausch.com';
+            } else if ($is_approve == 2 || $is_approve == 3) {
+                $approver_email = $createduser_email;
+
+                if ($is_approve == 3) {
+                    $reWorkEmail = 'nikhil.vasu@bausch.com';
+                    $reWorkUserName = 'Bnlibos.Jaya';
+                }
+            }
+        } else if ($sequence == 5) {
+            if ($is_approve == 0) {
+                $approver_email = 'aman.vaid@bausch.com';
+            } else if ($is_approve == 2 || $is_approve == 3) {
+                $approver_email = $createduser_email;
+                if ($is_approve == 3) {
+                    $reWorkEmail = 'jaya.banerjee@bausch.com';
+                    $reWorkUserName = 'Bnlibos.Aman';
+                }
+            }
+        } else if ($sequence == 6) {
+            echo "In case 6";
+            if ($is_approve == 0) {
+                $all_approved = 1;
+
+
+                $approver_email = 'sandeep.awasthi@bausch.com';
+
+                $config = array();
+                $config['to'] = array($createduser_email);
+                $config['cc'] = array('minaj.patel@mobisy.com', 'sachin.sirvi@mobisy.com', 'ravi.mamgain@mobisy.com', 'chintan.arora@bausch.com');
+                $config['subject'] = "Outlet Approved";
+                $config['message'] = "
+                <p>Dear user,</p>
+                <p>The requested Outlet is approved by all the approvers. Kindly check the beat and do the transaction.</p>
+                <p>Please find below the details:</p>
+                <table border='1'>
+                    <tr>
+                        <th>Outlet ID</th>
+                        <th>Outlet Name</th>
+                        <th>Created by Username</th>
+                        <th>Distributor Name</th>
+                    </tr>
+                    <tr>
+                        <td>$outletid</td>
+                        <td>$outlet_name</td>
+                        <td>$createduser_name</td>
+                        <td>$warehousesname</td>
+                    </tr>
+                </table>
+                <p>Click here to check Request Details: <a href='https://bnlibosdms.com/outlets/viewunapprovedoutlets'>View Unapproved Outlets</a></p>
+                <p>Kindly contact iBOS helpdesk for any issue - ibos.support@bausch.com</p>
+            ";
+
+                // Send email
+                $this->runAction('email', $config);
+            } else if ($is_approve == 2 || $is_approve == 3) {
+                $approver_email = $createduser_email;
+
+                if ($is_approve == 3) {
+                    $reWorkEmail = 'aman.vaid@bausch.com';
+                    $reWorkUserName = 'Bnlibos.Sandeep';
+                }
+            }
+        }
+
+
+        if ($is_approve == 0) {
+            $config = array();
+
+            echo "Approver mail";
+            pr($approver_email);
+            $config['to'] = array($approver_email);
+            $config['cc'] = array('ravi.mamgain@mobisy.com', 'chintan.arora@bausch.com');
+            $config['subject'] = "New Outlet Approval Request - $outlet_name";
+            $config['message'] = "
+                <p>Dear user,</p>
+                <p>You have received a request for an Outlet creation.</p>
+                <p>Please find below the details:</p>
+                <table border='1'>
+                    <tr>
+                        <th>Outlet ID</th>
+                        <th>Outlet Name</th>
+                        <th>Created by Username</th>
+                        <th>Distributor Name</th>
+                    </tr>
+                    <tr>
+                        <td>$outletid</td>
+                        <td>$outlet_name</td>
+                        <td>$createduser_name</td>
+                        <td>$warehousesname</td>
+                    </tr>
+                </table>
+                <p>Click here to check Request Details: <a href='https://bnlibosdms.com/outlets/viewunapprovedoutlets'>View Unapproved Outlets</a></p>
+                <p>Kindly contact iBOS helpdesk for any issue - ibos.support@bausch.com</p>
+            ";
+            $this->runAction('email', $config);
+
+        } else if ($all_approved == 1) {
+            // Send approval email to created user
+            $config = array();
+            $config['to'] = array($createduser_email);
+            $config['cc'] = array('ravi.mamgain@mobisy.com');
+            $config['subject'] = "Outlet Approved";
+            $config['message'] = "
+                <p>Dear user,</p>
+                <p>The requested Outlet is approved by all the approvers. Kindly check the beat and do the transaction.</p>
+                <p>Please find below the details:</p>
+                <table border='1'>
+                    <tr>
+                        <th>Outlet ID</th>
+                        <th>Outlet Name</th>
+                        <th>Created by Username</th>
+                        <th>Distributor Name</th>
+                    </tr>
+                    <tr>
+                        <td>$outletid</td>
+                        <td>$outlet_name</td>
+                        <td>$createduser_name</td>
+                        <td>$warehousesname</td>
+                    </tr>
+                </table>
+                <p>Click here to check Request Details: <a href='https://bnlibosdms.com/outlets/viewunapprovedoutlets'>View Unapproved Outlets</a></p>
+                <p>Kindly contact iBOS helpdesk for any issue - ibos.support@bausch.com</p>
+            ";
+            // Send email
+            $this->runAction('email', $config);
+        } else if ($is_approve == 2) {
+
+            echo "in second $is_approve == 2";
+            //  Send rejection email to created user
+            $config = array();
+            $config['to'] = array($createduser_email);
+            $config['cc'] = array('ravi.mamgain@mobisy.com', 'chintan.arora@bausch.com');
+
+            $config['subject'] = "Outlet Rejection Notification - $outlet_name";
+            $config['message'] = "
+                <p>Dear user,</p>
+                <p>The requested Outlet has been rejected with the reason - $reason.</p>
+                <p>Please find below the details:</p>
+                <table border='1'>
+                    <tr>
+                        <th>Outlet ID</th>
+                        <th>Outlet Name</th>
+                        <th>Created by Username</th>
+                        <th>Distributor Name</th>
+                        <th>Approved/Rejected By</th>
+                    </tr>
+                    <tr>
+                        <td>$outletid</td>
+                        <td>$outlet_name</td>
+                        <td>$createduser_name</td>
+                        <td>$warehousesname</td>
+                         <td>$approvedby</td>           
+                    </tr>
+                </table>
+                <p>Click here to check Request Details: <a href='https://bnlibosdms.com/outlets/viewunapprovedoutlets'>View Unapproved Outlets</a></p>
+                <p>Kindly contact iBOS helpdesk for any issue - ibos.support@bausch.com</p>
+            ";
+
+
+            $this->runAction('email', $config);
+
+
+        } else if ($is_approve == 3) {
+            // Send rework request email to created user
+            $config = array();
+            $config['to'] = array($reWorkEmail);
+            $config['cc'] = array('ravi.mamgain@mobisy.com', 'chintan.arora@bausch.com');
+
+            $config['subject'] = "Rework Request Notification - $outlet_name";
+            $config['message'] = "
+                <p>Dear user,</p>
+                <p>Your request to create a new outlet:$outletid has been sent for Rework.</p>
+                <p>Please find below the details:</p>
+                <table border='1'>
+                    <tr>
+                         <th>Outlet ID</th>
+                        <th>Outlet Name</th>
+                        <th>Rework  request by, Username</th>
+                        <th>Distributor Name</th>
+                        <th>Reason for Rework</th>
+                    </tr>
+                    <tr>
+                        <td>$outletid</td>
+                        <td>$outlet_name</td>
+                        <td> $reWorkUserName</td>
+                        <td>$warehousesname</td>
+                         <td>$reason</td>       
+                    </tr>
+                </table>
+                <p>Click here to check Request Details: <a href='https://bnlibosdms.com/outlets/viewunapprovedoutlets'>View Unapproved Outlets</a></p>
+                <p>Kindly contact iBOS helpdesk for any issue - ibos.support@bausch.com</p>
+            ";
+
+            $this->runAction('email', $config);
+        }
+        echo "modified date";
+
+
+        echo "========================================================================";
+    }
+
+    $_UPDATEVAR['lastExecutedOn'] = $modified_date;
+
+}
+*/

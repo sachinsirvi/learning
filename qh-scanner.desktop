@@ -1,0 +1,16 @@
+[Desktop Entry]
+Version=1.0
+Encoding=UTF-8
+Name=Seqrite Endpoint Protection
+Name[en_US]=Seqrite Endpoint Protection
+GenericName=Seqrite Endpoint Protection
+GenericName[en_US]=Seqrite Endpoint Protection
+Type=Application
+TryExec=/usr/lib/Seqrite/Seqrite/qhscanui
+Exec=/usr/lib/Seqrite/Seqrite/qhscanui
+Icon=/opt/SeqriteIcon/qh.png
+Terminal=false
+Categories=Seqrite;
+Comment=Seqrite Endpoint Protection
+Comment[en_US]=Seqrite Endpoint Protection
+GenericName[POSIX]=Seqrite Endpoint Protection
