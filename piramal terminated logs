@@ -1,0 +1,26 @@
+if (!empty($GLOBALS['message'])) {
+        $filePath = "/tmp/PiramalProductionLogs.txt";
+        $logFile = fopen($filePath, "w");
+        $msg = $GLOBALS["message"];
+        fwrite($logFile, $msg);
+        fclose($logFile);
+
+        if (str_contains($GLOBALS['message'], 'Terminated') || str_contains($GLOBALS['message'], 'No claimfield options')) {
+            $config = array();
+            $config['to'] = array('sachin.sirvi@mobisy.com','pranay.panda@distiman.com');
+            $config['subject'] = "[Piramal-Shakti] ERROR Notification Logs" . date("Y-m-d");
+            $config['message'] = 'PFA';
+            $config['attachments'] = array($filePath);
+            $this->runAction('email', $config);
+            pr($config);
+        } else {
+            $config = array();
+            $config['to'] = array('sachin.sirvi@mobisy.com','pranay.panda@distiman.com');
+            $config['subject'] = "[Piramal-Shakti] TEST SO- Staging Claim Logs " . date("Y-m-d");
+            $config['message'] = 'PFA';
+            $config['attachments'] = array($filePath);
+            $this->runAction('email', $config);
+            pr($config);
+        }
+    }
+
